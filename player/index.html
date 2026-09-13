@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fantasy Draft Party</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #1a1a2e;
+      --card: #16213e;
+      --accent: #e94560;
+      --text: #eaeaea;
+      --muted: #a0a0b0;
+      --border: rgba(255,255,255,0.1);
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+    .screen { display: none; flex-direction: column; flex: 1; padding: 24px 20px; gap: 14px; }
+    .screen.active { display: flex; }
+
+    /* ── Shared ─────────────────────────── */
+    .field label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field select {
+      width: 100%; background: var(--card); border: 1px solid var(--border);
+      color: var(--text); padding: 14px; border-radius: 10px; font-size: 1rem; font-family: inherit;
+    }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+    .btn { width: 100%; padding: 16px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; letter-spacing: 1px; cursor: pointer; font-family: inherit; }
+    .btn:disabled { opacity: 0.4; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .error { color: var(--accent); font-size: 0.85rem; min-height: 16px; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    .center { text-align: center; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.4rem; }
+    .spinner { width: 44px; height: 44px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Join ───────────────────────────── */
+    #join-screen { justify-content: center; }
+    #join-screen h1 span { color: var(--accent); }
+    .code-input { text-transform: uppercase; letter-spacing: 6px; font-size: 1.3rem !important; text-align: center; }
+
+    /* ── Leader lobby ───────────────────── */
+    #leader-lobby-screen { overflow-y: auto; }
+    .leader-badge {
+      background: var(--accent);
+      color: white;
+      text-align: center;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .row { display: flex; gap: 10px; }
+    .row .field { flex: 1; }
+
+    /* ── Waiting lobby ──────────────────── */
+    #waiting-lobby-screen { align-items: center; justify-content: center; }
+
+    /* ── Wait for turn ──────────────────── */
+    #wait-screen { align-items: center; justify-content: center; }
+
+    /* ── Pick ───────────────────────────── */
+    #pick-screen { overflow-y: auto; }
+    .round-badge {
+      display: inline-block; background: var(--accent); padding: 4px 14px;
+      border-radius: 100px; font-size: 0.8rem; font-weight: bold;
+    }
+    textarea {
+      width: 100%; background: var(--card); border: 1px solid var(--border);
+      color: var(--text); padding: 14px; border-radius: 10px; font-size: 1rem;
+      resize: none; height: 90px; font-family: inherit;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); }
+    .picks-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .pick-chip { background: var(--card); border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; font-size: 0.95rem; display: flex; gap: 8px; }
+    .pick-chip .num { color: var(--accent); font-weight: bold; }
+
+    /* ── Vote ───────────────────────────── */
+    #vote-screen { overflow-y: auto; }
+    .vote-option {
+      background: var(--card); border: 2px solid var(--border); border-radius: 10px;
+      padding: 14px; font-size: 1rem; font-weight: bold; cursor: pointer;
+    }
+    .vote-option.selected { border-color: var(--accent); background: rgba(233,69,96,0.1); }
+    .vote-option.self { opacity: 0.3; pointer-events: none; }
+    .picks-preview { font-size: 0.8rem; color: var(--muted); font-weight: normal; margin-top: 4px; }
+
+    /* ── Results ────────────────────────── */
+    #player-results-screen { overflow-y: auto; }
+    .winner-card { background: var(--card); border-radius: 10px; padding: 16px; border: 1px solid var(--accent); text-align: center; }
+    .winner-card .trophy { font-size: 2rem; }
+    .winner-name { font-size: 1.3rem; font-weight: bold; color: var(--accent); }
+    .winner-sub { color: var(--muted); font-size: 0.9rem; }
+    .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .image-download-block { display: none; margin-top: 6px; }
+    .image-download-block img { width: 100%; border-radius: 8px; margin-bottom: 8px; }
+    a.btn { text-decoration: none; display: block; text-align: center; }
+  </style>
+</head>
+<body>
+
+<!-- ── Join ──────────────────────────── -->
+<div id="join-screen" class="screen active">
+  <h1>FANTASY <span>DRAFT</span></h1>
+  <div class="field">
+    <label>Room Code</label>
+    <input id="room-code-input" class="code-input" type="text" maxlength="4" placeholder="XXXX" autocomplete="off" autocorrect="off" spellcheck="false">
+  </div>
+  <div class="field">
+    <label>Your Name</label>
+    <input id="name-input" type="text" maxlength="20" placeholder="Enter your name" autocomplete="off">
+  </div>
+  <div class="error" id="join-error"></div>
+  <button class="btn btn-primary" id="join-btn">JOIN GAME</button>
+</div>
+
+<!-- ── Leader lobby ───────────────────── -->
+<div id="leader-lobby-screen" class="screen">
+  <div class="leader-badge">★ YOU ARE THE ROOM LEADER</div>
+  <p class="muted center">Set up the draft — your choices appear on the main screen live.</p>
+
+  <div class="field">
+    <label>Draft Category</label>
+    <input id="category-input" type="text" maxlength="60" placeholder="e.g. Best Fast Food Restaurants" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>Rounds</label>
+    <select id="max-rounds-select">
+      <option value="3">3</option><option value="4">4</option>
+      <option value="5" selected>5</option><option value="6">6</option>
+      <option value="7">7</option><option value="8">8</option>
+      <option value="9">9</option><option value="10">10</option>
+    </select>
+  </div>
+
+  <div class="error" id="leader-error"></div>
+  <div class="muted center" id="lobby-player-count">1 of 4 players joined</div>
+  <button class="btn btn-primary" id="start-game-btn" disabled>START DRAFT</button>
+</div>
+
+<!-- ── Non-leader lobby ───────────────── -->
+<div id="waiting-lobby-screen" class="screen">
+  <div class="spinner"></div>
+  <h2 class="center">You're in!</h2>
+  <p class="muted center" id="wait-player-count"></p>
+  <p class="muted center">Waiting for the leader to start the game...</p>
+</div>
+
+<!-- ── Waiting for turn ───────────────── -->
+<div id="wait-screen" class="screen">
+  <div class="spinner"></div>
+  <h2 class="center" id="wait-message">Waiting for your turn...</h2>
+  <div class="picks-label" style="margin-top:8px">My picks so far</div>
+  <div id="wait-picks-list"></div>
+</div>
+
+<!-- ── Pick ──────────────────────────── -->
+<div id="pick-screen" class="screen">
+  <div class="center">
+    <div class="round-badge" id="pick-round-badge">ROUND 1</div>
+  </div>
+  <h2 class="center">YOUR PICK</h2>
+  <p class="muted center" id="pick-category"></p>
+  <textarea id="pick-input" placeholder="Enter your pick..." maxlength="60"></textarea>
+  <div class="error" id="pick-error"></div>
+  <button class="btn btn-primary" id="submit-pick-btn">LOCK IT IN</button>
+  <div class="picks-label">My picks so far</div>
+  <div id="my-picks-list"></div>
+</div>
+
+<!-- ── Vote ──────────────────────────── -->
+<div id="vote-screen" class="screen">
+  <h2 class="center">VOTE!</h2>
+  <p class="muted center">Who had the best draft?</p>
+  <p class="muted center" style="font-size:0.8rem;">(You can't vote for yourself)</p>
+  <div id="vote-options"></div>
+  <div class="error" id="vote-error"></div>
+  <button class="btn btn-primary" id="submit-vote-btn" disabled>SUBMIT VOTE</button>
+</div>
+
+<!-- ── Voted ─────────────────────────── -->
+<div id="voted-screen" class="screen" style="align-items:center;justify-content:center;">
+  <div class="spinner"></div>
+  <h2 class="center">Vote Cast!</h2>
+  <p class="muted center">Waiting for other players...</p>
+</div>
+
+<!-- ── Results ───────────────────────── -->
+<div id="player-results-screen" class="screen">
+  <!-- Shown when there was voting (3+ players) -->
+  <div id="results-voted-section" style="display:none">
+    <div class="winner-card" id="results-winner"></div>
+    <div class="section-label">My Draft</div>
+    <div id="my-final-picks"></div>
+  </div>
+
+  <!-- Shown for 2-player (no voting) -->
+  <div id="results-nodraft-section" style="display:none">
+    <h2 class="center">DRAFT COMPLETE</h2>
+    <div id="all-drafts-list"></div>
+  </div>
+
+  <button class="btn btn-secondary" id="gen-my-image-btn">Save My Draft Card</button>
+  <div class="image-download-block" id="my-image-container">
+    <img id="my-draft-img" src="" alt="My Draft">
+    <a id="my-download-link" class="btn btn-secondary">Download My Card</a>
+  </div>
+
+  <button class="btn btn-primary" id="gen-full-image-btn-player">Save Full Draft Image</button>
+  <div class="image-download-block" id="full-image-container">
+    <img id="full-draft-img" src="" alt="Full Draft">
+    <a id="full-download-link" class="btn btn-primary">Download Full Draft</a>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="player.js"></script>
+</body>
+</html>

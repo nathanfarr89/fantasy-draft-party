@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fantasy Draft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@900&family=Fira+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #E6E7DF;
+      --panel:     #F4F5EC;
+      --sidebar:   #1E1E1E;
+      --text:      #1E1E1E;
+      --muted:     #9A9A9A;
+      --border:    rgba(0,0,0,0.1);
+      --font-name: 'Barlow Condensed', sans-serif;
+      --font-body: 'Fira Sans', sans-serif;
+      --font-logo: 'Instrument Serif', serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen { display: none; height: 100vh; }
+    .screen.active { display: flex; }
+
+    /* ── Shared sidebar ──────────────────────────────────── */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--sidebar);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 28px 24px;
+      gap: 20px;
+      flex-shrink: 0;
+    }
+    .sidebar-logo {
+      font-family: var(--font-logo);
+      font-size: 1.5rem;
+      color: white;
+      letter-spacing: 1px;
+      line-height: 1.1;
+    }
+    .sidebar-divider { border: none; border-top: 1px solid rgba(255,255,255,0.12); }
+    .sidebar-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.45); }
+    .sidebar-room-code { font-family: var(--font-name); font-size: 5rem; line-height: 1; color: white; letter-spacing: 4px; }
+    .sidebar-url-box {
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 8px 10px;
+      font-size: 0.7rem;
+      letter-spacing: 1.5px;
+      color: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+    }
+    .sidebar-url-sub { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+    /* ── Lobby ───────────────────────────────────────────── */
+    #lobby-screen { flex-direction: row; }
+    .lobby-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 28px;
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    .settings-box {
+      border: 1px solid var(--border);
+      padding: 14px 18px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      background: var(--panel);
+    }
+    .settings-box-left { display: flex; flex-direction: column; gap: 3px; }
+    .settings-cat-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+    .settings-cat-value { font-family: var(--font-name); font-size: 1.6rem; letter-spacing: 1px; text-transform: uppercase; }
+    .settings-cat-placeholder { font-family: var(--font-body); font-size: 1rem; color: var(--muted); font-style: italic; }
+    .settings-rounds { text-align: right; }
+    .settings-rounds-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+    .settings-rounds-value { font-family: var(--font-name); font-size: 2.5rem; line-height: 1; }
+
+    .players-label-row { display: flex; justify-content: space-between; align-items: center; }
+    .players-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+    .players-count { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; color: var(--text); }
+
+    .player-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+    .player-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .player-row:nth-child(odd) { padding-right: 24px; border-right: 1px solid var(--border); }
+    .player-row:nth-child(even) { padding-left: 24px; }
+    .player-name-display { font-family: var(--font-name); font-size: 1.4rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+    .player-slot-empty { font-size: 0.75rem; color: var(--muted); letter-spacing: 1px; }
+    .player-badge { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+
+    .lobby-status { font-size: 0.8rem; color: var(--muted); font-style: italic; margin-top: auto; }
+
+    /* ── Draft ───────────────────────────────────────────── */
+    #draft-screen { flex-direction: column; overflow: hidden; }
+
+    .draft-topbar {
+      background: var(--sidebar);
+      color: white;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .draft-topbar-left { display: flex; align-items: baseline; gap: 14px; }
+    .draft-topbar-logo { font-family: var(--font-logo); font-size: 1rem; color: rgba(255,255,255,0.6); }
+    .draft-topbar-cat { font-family: var(--font-name); font-size: 1.3rem; color: white; text-transform: uppercase; letter-spacing: 1px; }
+    .draft-topbar-round { font-family: var(--font-name); font-size: 1.3rem; color: white; text-transform: uppercase; letter-spacing: 1px; }
+    .draft-topbar-round span { color: var(--muted); }
+
+    .draft-order-bar {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .order-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
+    .order-pill {
+      border: 1.5px solid currentColor;
+      border-radius: 100px;
+      padding: 3px 12px;
+      font-family: var(--font-name);
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      opacity: 0.5;
+    }
+    .order-pill.active { opacity: 1; background: currentColor; }
+    .order-pill.active span { color: white; mix-blend-mode: difference; }
+    .order-pill span { }
+    .order-arrow { color: var(--muted); font-size: 0.8rem; flex-shrink: 0; }
+
+    .draft-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 16px 24px; gap: 14px; }
+
+    .active-picker-name {
+      font-family: var(--font-name);
+      font-size: 4rem;
+      line-height: 1;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .boards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .board-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+    }
+    .board-card.on-deck { outline: 2px solid currentColor; outline-offset: -2px; }
+    .board-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 8px;
+      border-bottom: 2px solid currentColor;
+      margin-bottom: 8px;
+    }
+    .board-card-name { font-family: var(--font-name); font-size: 1rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+    .board-on-deck-badge { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+    .board-pick { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+    .board-pick:last-child { border-bottom: none; }
+    .board-pick-num { font-size: 0.65rem; font-weight: 700; min-width: 18px; }
+    .board-pick-text { font-size: 0.8rem; font-weight: 500; flex: 1; }
+    .board-pick-text.pending { color: var(--muted); font-style: italic; font-weight: 400; }
+    .board-pick-empty { color: var(--border); }
+
+    /* ── Voting ──────────────────────────────────────────── */
+    #voting-screen { align-items: center; justify-content: center; flex-direction: column; gap: 20px; text-align: center; }
+    #voting-screen h1 { font-family: var(--font-name); font-size: 5rem; letter-spacing: 3px; }
+    #voting-screen p { color: var(--muted); font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; font-size: 0.75rem; }
+    .votes-counter { font-family: var(--font-name); font-size: 3rem; }
+
+    /* ── Results ─────────────────────────────────────────── */
+    #results-screen { flex-direction: row; overflow: hidden; }
+
+    .results-left {
+      width: 380px;
+      min-width: 380px;
+      background: var(--sidebar);
+      color: white;
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .results-left-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.45); }
+    .results-winner-name {
+      font-family: var(--font-name);
+      font-size: 5.5rem;
+      line-height: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .results-winner-picks { margin-top: 8px; display: flex; flex-direction: column; gap: 0; }
+    .results-winner-pick { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .results-pick-num { font-size: 0.7rem; font-weight: 700; min-width: 20px; }
+    .results-pick-val { font-size: 0.9rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .results-right { flex: 1; display: flex; flex-direction: column; padding: 28px; gap: 20px; overflow-y: auto; }
+    .tally-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+    .tally-rows { display: flex; flex-direction: column; gap: 0; }
+    .tally-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .tally-name { font-family: var(--font-name); font-size: 1.2rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; min-width: 120px; }
+    .tally-bar-track { flex: 1; height: 6px; background: var(--border); }
+    .tally-bar-fill { height: 100%; transition: width 0.6s ease; }
+    .tally-votes { font-family: var(--font-name); font-size: 1.2rem; min-width: 24px; text-align: right; }
+
+    .results-actions { display: flex; gap: 10px; margin-top: auto; }
+    .btn {
+      padding: 10px 20px;
+      border: 1.5px solid var(--text);
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--text); color: white; }
+    .btn.primary { background: var(--text); color: white; }
+    .btn.primary:hover { opacity: 0.8; }
+
+    /* ── Image preview ───────────────────────────────────── */
+    #image-preview {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #image-preview img { max-width: 90vw; max-height: 80vh; }
+    .close-btn { position: absolute; top: 20px; right: 24px; font-size: 1.5rem; cursor: pointer; color: white; background: none; border: none; }
+    #preview-download { text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<!-- ── Lobby ──────────────────────────────────────────── -->
+<div id="lobby-screen" class="screen active">
+  <div class="sidebar">
+    <div class="sidebar-logo">Fantasy<br>Draft</div>
+    <hr class="sidebar-divider">
+    <div>
+      <div class="sidebar-label">Room Code</div>
+      <div class="sidebar-room-code" id="room-code">----</div>
+    </div>
+    <div>
+      <div class="sidebar-label">Players go to</div>
+      <div class="sidebar-url-box" id="join-url">...</div>
+      <div class="sidebar-url-sub">Enter room code</div>
+    </div>
+  </div>
+
+  <div class="lobby-main">
+    <div class="settings-box">
+      <div class="settings-box-left">
+        <div class="settings-cat-label">Draft Category</div>
+        <div id="display-category"><span class="settings-cat-placeholder">Waiting for leader to set...</span></div>
+      </div>
+      <div class="settings-rounds">
+        <div class="settings-rounds-label">Rounds</div>
+        <div class="settings-rounds-value" id="display-max-rounds">–</div>
+      </div>
+    </div>
+
+    <div class="players-label-row">
+      <div class="players-label">Players Joined</div>
+      <div class="players-count" id="players-count">0 OF 8</div>
+    </div>
+
+    <div class="player-grid" id="player-list"></div>
+    <div class="lobby-status" id="lobby-status">Waiting for players to join...</div>
+  </div>
+</div>
+
+<!-- ── Draft ──────────────────────────────────────────── -->
+<div id="draft-screen" class="screen">
+  <div class="draft-topbar">
+    <div class="draft-topbar-left">
+      <div class="draft-topbar-logo">Fantasy Draft</div>
+      <div style="color:rgba(255,255,255,0.3)">|</div>
+      <div class="draft-topbar-cat" id="draft-category"></div>
+    </div>
+    <div class="draft-topbar-round">ROUND <span id="draft-round-current">1</span><span style="color:var(--muted)"> OF <span id="draft-round-total">5</span></span></div>
+  </div>
+
+  <div class="draft-order-bar" id="draft-order-bar">
+    <div class="order-label">Players Order</div>
+  </div>
+
+  <div class="draft-body">
+    <div class="active-picker-name" id="active-picker-name" style="color:#6562F5">–</div>
+    <div class="boards-grid" id="draft-boards"></div>
+  </div>
+</div>
+
+<!-- ── Voting ─────────────────────────────────────────── -->
+<div id="voting-screen" class="screen">
+  <h1>Vote Time!</h1>
+  <p>Open your phone and vote for the best draft</p>
+  <p style="font-size:0.7rem;color:var(--muted);">(You cannot vote for yourself)</p>
+  <div class="votes-counter" id="vote-progress">0 / 0</div>
+  <p style="font-size:0.7rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;">votes cast</p>
+</div>
+
+<!-- ── Results ────────────────────────────────────────── -->
+<div id="results-screen" class="screen">
+  <div class="results-left" id="results-left">
+    <div class="results-left-label">Best Draft</div>
+    <div class="results-winner-name" id="results-winner-name" style="color:#16B8A6">–</div>
+    <div class="results-left-label" id="results-vote-subtitle"></div>
+    <div class="results-winner-picks" id="results-winner-picks"></div>
+  </div>
+  <div class="results-right">
+    <div class="tally-label">The Final Tally</div>
+    <div class="tally-rows" id="tally-rows"></div>
+    <div class="results-actions">
+      <button class="btn primary" id="gen-full-image-btn">Generate Draft Image</button>
+      <button class="btn" id="play-again-btn">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Image Preview ──────────────────────────────────── -->
+<div id="image-preview">
+  <button class="close-btn" id="close-preview">✕</button>
+  <img id="preview-img" src="" alt="Draft Results">
+  <a id="preview-download" class="btn primary" download="draft-results.png">Download Image</a>
+</div>
+
+<script src="host.js"></script>
+</body>
+</html>
