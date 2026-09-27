@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Fantasy Draft</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@900&family=Fira+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+  <link href="fonts/fonts.css" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -63,6 +61,8 @@
       color: rgba(255,255,255,0.7);
       text-transform: uppercase;
     }
+    .sidebar-qr { width: 100%; max-width: 180px; aspect-ratio: 1; background: white; padding: 8px; display: block; }
+    .sidebar-qr[src=""] { visibility: hidden; }
     .sidebar-url-sub { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
 
     /* ── Lobby ───────────────────────────────────────────── */
@@ -323,6 +323,10 @@
       <div class="sidebar-label">Players go to</div>
       <div class="sidebar-url-box" id="join-url">...</div>
       <div class="sidebar-url-sub">Enter room code</div>
+    </div>
+    <div>
+      <div class="sidebar-label" style="margin-bottom:8px">Or scan to join</div>
+      <img class="sidebar-qr" id="join-qr" src="" alt="QR code to join this room">
     </div>
   </div>
 

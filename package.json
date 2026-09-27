@@ -7,7 +7,9 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "build:steam": "electron-builder --win dir",
+    "build:steam:mac": "electron-builder --mac dir"
   },
   "build": {
     "appId": "com.fantasydraft.party",
@@ -16,13 +18,30 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        "nsis"
+      ]
+    },
+    "files": [
+      "main.js",
+      "config.js",
+      "host/**/*",
+      "player/**/*",
+      "server/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.games"
     }
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.53",
     "express": "^4.18.2",
     "ip": "^2.0.1",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {

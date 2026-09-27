@@ -1,8 +1,10 @@
 const io = require('../node_modules/socket.io/client-dist/socket.io.js');
+const QRCode = require('qrcode');
 const { SERVER_URL } = require('../config');
 
 let socket;
 let currentRoomCode = null;
+let joinBaseUrl = SERVER_URL;
 let gameState = null;
 let resultsRendered = false;
 let pickDeadline = null; // local-clock ms timestamp, or null when no time limit
@@ -39,19 +41,19 @@ function snakeOrder(players, round) {
 
 async function init() {
   // Show the URL players use to join
-  const displayUrl = SERVER_URL.replace(/^https?:\/\//, '').replace(/:3000$/, '');
-  document.getElementById('join-url').textContent = SERVER_URL.includes('localhost')
+  joinBaseUrl = SERVER_URL.includes('localhost')
     ? (() => {
         const os = require('os');
         const nets = os.networkInterfaces();
         for (const iface of Object.values(nets)) {
           for (const addr of iface) {
-            if (addr.family === 'IPv4' && !addr.internal) return `http://${addr.address}:3000`;
+            if (addr.family === 'IPv4' && !addr.internal) return `http://${addr.address}:${new URL(SERVER_URL).port || 3000}`;
           }
         }
         return SERVER_URL;
       })()
     : SERVER_URL;
+  document.getElementById('join-url').textContent = joinBaseUrl;
 
   socket = io(SERVER_URL, { transports: ['websocket'] });
   // On reconnect, pass the current code so the server resumes the same room
@@ -60,6 +62,7 @@ async function init() {
   socket.on('host:room_created', ({ code }) => {
     currentRoomCode = code;
     document.querySelectorAll('.room-code-text').forEach(el => { el.textContent = code; });
+    renderJoinQr(code);
   });
 
   socket.on('host:state_update', render);
@@ -123,6 +126,14 @@ function updateTimer() {
 }
 
 // ── Lobby ─────────────────────────────────────────────────────────────────────
+
+// Scanning opens the join page with the room code already filled in
+function renderJoinQr(code) {
+  const url = `${joinBaseUrl.replace(/\/$/, '')}/?code=${code}`;
+  QRCode.toDataURL(url, { margin: 1, width: 360, color: { dark: '#1E1E1E', light: '#FFFFFF' } })
+    .then(dataUrl => { document.getElementById('join-qr').src = dataUrl; })
+    .catch(console.error);
+}
 
 function renderLobby(state) {
   // Category & rounds

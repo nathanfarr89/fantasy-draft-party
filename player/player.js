@@ -12,6 +12,16 @@ let wasOnDeck = false;
 let resultsRendered = false;
 let pickDeadline = null; // local-clock ms timestamp, or null when no time limit
 
+// A QR code scan opens /?code=ABCD — prefill it, and drop any saved session
+// from a different room so we don't rejoin the old game instead
+const urlCode = new URLSearchParams(location.search).get('code');
+if (urlCode) {
+  const code = urlCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  document.getElementById('room-code-input').value = code;
+  if (loadSession()?.code !== code) clearSession();
+  history.replaceState(null, '', location.pathname);
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
