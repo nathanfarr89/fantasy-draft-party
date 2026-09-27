@@ -114,6 +114,8 @@
     .player-slot-empty { font-size: 0.75rem; color: var(--muted); letter-spacing: 1px; }
     .player-badge { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
 
+    .player-row.away .player-name-display, .board-card.away { opacity: 0.4; }
+    .settings-time { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
     .lobby-status { font-size: 0.8rem; color: var(--muted); font-style: italic; margin-top: auto; }
 
     /* ── Draft ───────────────────────────────────────────── */
@@ -172,6 +174,13 @@
       letter-spacing: 2px;
     }
 
+    .draft-headline { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+    .draft-timer { font-family: var(--font-name); font-size: 4rem; line-height: 1; font-variant-numeric: tabular-nums; }
+    .draft-timer.urgent { color: #F05252; animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+    .active-picker-away { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+    .topbar-btn { border-color: rgba(255,255,255,0.4); color: white; padding: 6px 14px; margin-left: 16px; }
+    .topbar-btn:hover { background: white; color: var(--text); }
     .boards-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -261,6 +270,27 @@
     .btn.primary { background: var(--text); color: white; }
     .btn.primary:hover { opacity: 0.8; }
 
+    /* ── Sound settings ──────────────────────────────────── */
+    .sound-toggle {
+      position: fixed; right: 16px; bottom: 16px; z-index: 50;
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+      font-size: 1.1rem; cursor: pointer; opacity: 0.6;
+    }
+    .sound-toggle:hover, .sound-toggle[aria-expanded="true"] { opacity: 1; }
+    .sound-panel {
+      display: none; position: fixed; right: 16px; bottom: 64px; z-index: 50;
+      width: 240px; padding: 14px 16px; background: var(--panel);
+      border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+      flex-direction: column; gap: 12px;
+    }
+    .sound-panel.open { display: flex; }
+    .sound-panel-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+    .sound-row { display: flex; align-items: center; gap: 10px; }
+    .sound-row input[type=range] { flex: 1; accent-color: var(--text); }
+    .sound-volume-value { font-size: 0.75rem; font-weight: 600; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+    .sound-hint { font-size: 0.6rem; color: var(--muted); }
+
     /* ── Image preview ───────────────────────────────────── */
     #image-preview {
       display: none;
@@ -287,7 +317,7 @@
     <hr class="sidebar-divider">
     <div>
       <div class="sidebar-label">Room Code</div>
-      <div class="sidebar-room-code" id="room-code">----</div>
+      <div class="sidebar-room-code room-code-text" id="room-code">----</div>
     </div>
     <div>
       <div class="sidebar-label">Players go to</div>
@@ -305,6 +335,7 @@
       <div class="settings-rounds">
         <div class="settings-rounds-label">Rounds</div>
         <div class="settings-rounds-value" id="display-max-rounds">–</div>
+        <div class="settings-time" id="display-pick-time"></div>
       </div>
     </div>
 
@@ -326,7 +357,11 @@
       <div style="color:rgba(255,255,255,0.3)">|</div>
       <div class="draft-topbar-cat" id="draft-category"></div>
     </div>
-    <div class="draft-topbar-round">ROUND <span id="draft-round-current">1</span><span style="color:var(--muted)"> OF <span id="draft-round-total">5</span></span></div>
+    <div style="display:flex;align-items:center">
+      <div class="draft-topbar-round">ROUND <span id="draft-round-current">1</span><span style="color:var(--muted)"> OF <span id="draft-round-total">5</span></span></div>
+      <div class="draft-topbar-logo" style="margin-left:16px">ROOM <span class="room-code-text"></span></div>
+      <button class="btn topbar-btn end-game-btn">End Game</button>
+    </div>
   </div>
 
   <div class="draft-order-bar" id="draft-order-bar">
@@ -334,7 +369,13 @@
   </div>
 
   <div class="draft-body">
-    <div class="active-picker-name" id="active-picker-name" style="color:#6562F5">–</div>
+    <div class="draft-headline">
+      <div>
+        <div class="active-picker-name" id="active-picker-name" style="color:#6562F5">–</div>
+        <div class="active-picker-away" id="active-picker-away" style="display:none">Disconnected — waiting for them to rejoin</div>
+      </div>
+      <div class="draft-timer" id="draft-timer" style="display:none"></div>
+    </div>
     <div class="boards-grid" id="draft-boards"></div>
   </div>
 </div>
@@ -346,6 +387,7 @@
   <p style="font-size:0.7rem;color:var(--muted);">(You cannot vote for yourself)</p>
   <div class="votes-counter" id="vote-progress">0 / 0</div>
   <p style="font-size:0.7rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;">votes cast</p>
+  <button class="btn end-game-btn" style="margin-top:20px">End Game</button>
 </div>
 
 <!-- ── Results ────────────────────────────────────────── -->
@@ -371,6 +413,19 @@
   <button class="close-btn" id="close-preview">✕</button>
   <img id="preview-img" src="" alt="Draft Results">
   <a id="preview-download" class="btn primary" download="draft-results.png">Download Image</a>
+</div>
+
+<!-- ── Sound settings ─────────────────────────────────── -->
+<audio id="bg-music" src="audio/background-music.mp3" loop preload="auto"></audio>
+<button class="sound-toggle" id="sound-toggle" aria-expanded="false" aria-controls="sound-panel" title="Sound settings">♪</button>
+<div class="sound-panel" id="sound-panel">
+  <div class="sound-panel-label">Music Volume</div>
+  <div class="sound-row">
+    <input type="range" id="volume-slider" min="0" max="100" step="5" aria-label="Music volume">
+    <div class="sound-volume-value" id="volume-value"></div>
+  </div>
+  <button class="btn" id="mute-btn">Mute</button>
+  <div class="sound-hint">Press M to mute or unmute</div>
 </div>
 
 <script src="host.js"></script>

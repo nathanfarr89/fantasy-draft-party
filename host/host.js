@@ -4,6 +4,8 @@ const { SERVER_URL } = require('../config');
 let socket;
 let currentRoomCode = null;
 let gameState = null;
+let resultsRendered = false;
+let pickDeadline = null; // local-clock ms timestamp, or null when no time limit
 
 const PLAYER_COLORS = [
   '#6562F5', // 1
@@ -52,30 +54,15 @@ async function init() {
     : SERVER_URL;
 
   socket = io(SERVER_URL, { transports: ['websocket'] });
-  socket.on('connect', () => socket.emit('host:init'));
+  // On reconnect, pass the current code so the server resumes the same room
+  socket.on('connect', () => socket.emit('host:init', { code: currentRoomCode }));
 
   socket.on('host:room_created', ({ code }) => {
     currentRoomCode = code;
-    document.getElementById('room-code').textContent = code;
+    document.querySelectorAll('.room-code-text').forEach(el => { el.textContent = code; });
   });
 
-  socket.on('host:state_update', (state) => {
-    gameState = state;
-    if (state.phase === 'lobby') renderLobby(state);
-    else if (state.phase === 'drafting') renderDraft(state);
-  });
-
-  socket.on('game:phase_change', ({ phase }) => {
-    if (phase === 'drafting') showScreen('draft-screen');
-    else if (phase === 'voting') showScreen('voting-screen');
-    else if (phase === 'results') showScreen('results-screen');
-  });
-
-  socket.on('host:votes_update', ({ votesCast, total }) => {
-    document.getElementById('vote-progress').textContent = `${votesCast} / ${total}`;
-  });
-
-  socket.on('game:results', ({ tally, players }) => renderResults(tally, players));
+  socket.on('host:state_update', render);
 
   socket.on('host:image_ready', ({ dataUrl }) => {
     document.getElementById('preview-img').src = dataUrl;
@@ -87,16 +74,52 @@ async function init() {
     socket.emit('host:generate_full_image', { code: currentRoomCode });
   });
 
+  // Back to the lobby with the same room code and players
   document.getElementById('play-again-btn').addEventListener('click', () => {
-    currentRoomCode = null;
-    gameState = null;
-    showScreen('lobby-screen');
-    socket.emit('host:init');
+    socket.emit('host:end_game');
   });
+
+  document.querySelectorAll('.end-game-btn').forEach(btn => btn.addEventListener('click', () => {
+    if (confirm('End this game and return everyone to the lobby?')) socket.emit('host:end_game');
+  }));
+
+  setInterval(updateTimer, 250);
 
   document.getElementById('close-preview').addEventListener('click', () => {
     document.getElementById('image-preview').style.display = 'none';
   });
+}
+
+function render(state) {
+  gameState = state;
+  pickDeadline = state.pickTimeRemainingMs != null ? Date.now() + state.pickTimeRemainingMs : null;
+  updateTimer();
+  if (state.phase !== 'results') resultsRendered = false;
+
+  if (state.phase === 'lobby') {
+    renderLobby(state);
+    showScreen('lobby-screen');
+  } else if (state.phase === 'drafting') {
+    renderDraft(state);
+    showScreen('draft-screen');
+  } else if (state.phase === 'voting') {
+    document.getElementById('vote-progress').textContent = `${state.votedIds.length} / ${state.players.length}`;
+    showScreen('voting-screen');
+  } else if (state.phase === 'results' && !resultsRendered) {
+    resultsRendered = true;
+    renderResults(state.results.tally, state.players);
+    showScreen('results-screen');
+  }
+}
+
+function updateTimer() {
+  const el = document.getElementById('draft-timer');
+  if (!pickDeadline) { el.style.display = 'none'; return; }
+  const remaining = Math.max(0, pickDeadline - Date.now());
+  const total = Math.ceil(remaining / 1000);
+  el.style.display = 'block';
+  el.textContent = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  el.classList.toggle('urgent', remaining <= 10000);
 }
 
 // ── Lobby ─────────────────────────────────────────────────────────────────────
@@ -110,21 +133,23 @@ function renderLobby(state) {
     catEl.innerHTML = `<span class="settings-cat-placeholder">Waiting for leader to set...</span>`;
   }
   document.getElementById('display-max-rounds').textContent = state.maxRounds || '–';
+  document.getElementById('display-pick-time').textContent =
+    state.pickTimeLimit ? `${state.pickTimeLimit / 60} min per pick` : 'No time limit';
 
   // Player count
   const count = state.players.length;
-  document.getElementById('players-count').textContent = `${count} OF 8`;
+  document.getElementById('players-count').textContent = `${count} OF ${state.maxPlayers}`;
 
   // 8-slot grid
   const list = document.getElementById('player-list');
-  const slots = Array.from({ length: 8 }, (_, i) => {
+  const slots = Array.from({ length: state.maxPlayers }, (_, i) => {
     const player = state.players[i];
     const isLeader = player && player.id === state.leaderId;
     const color = playerColor(i);
     if (player) {
-      return `<div class="player-row">
+      return `<div class="player-row${player.connected ? '' : ' away'}">
         <div class="player-name-display" style="color:${color}">${escHtml(player.name)}</div>
-        <div class="player-badge">${isLeader ? 'LEADER' : `P${i + 1}`}</div>
+        <div class="player-badge">${player.connected ? '' : 'RECONNECTING · '}${isLeader ? 'LEADER' : `P${i + 1}`}</div>
       </div>`;
     } else {
       return `<div class="player-row">
@@ -165,6 +190,8 @@ function renderDraft(state) {
   const pickerColor = playerColor(pickerIdx);
   const nameEl = document.getElementById('active-picker-name');
   nameEl.textContent = currentPicker ? currentPicker.name.toUpperCase() : '–';
+  document.getElementById('active-picker-away').style.display =
+    currentPicker && !currentPicker.connected ? 'block' : 'none';
   nameEl.style.color = pickerColor;
 
   // Snake order pills
@@ -207,10 +234,11 @@ function renderDraft(state) {
       }
     }).join('');
 
-    return `<div class="board-card${isOnDeck ? ' on-deck' : ''}" style="color:${color}">
+    return `<div class="board-card${isOnDeck ? ' on-deck' : ''}${player.connected ? '' : ' away'}" style="color:${color}">
       <div class="board-card-header">
         <div class="board-card-name">${escHtml(player.name.toUpperCase())}</div>
-        ${isOnDeck ? `<div class="board-on-deck-badge">ON DECK</div>` : ''}
+        ${!player.connected ? `<div class="board-on-deck-badge">DISCONNECTED</div>`
+          : isOnDeck ? `<div class="board-on-deck-badge">ON DECK</div>` : ''}
       </div>
       ${pickSlots}
     </div>`;
@@ -221,8 +249,8 @@ function renderDraft(state) {
 
 function renderResults(tally, players) {
   const winner = tally[0];
-  const winnerPlayer = players.find(p => p.name === winner.name);
-  const winnerIdx = players.findIndex(p => p.name === winner.name);
+  const winnerPlayer = players.find(p => p.id === winner.id);
+  const winnerIdx = players.findIndex(p => p.id === winner.id);
   const winnerColor = playerColor(winnerIdx);
   const hasVotes = tally.some(e => e.votes > 0);
 
@@ -244,7 +272,7 @@ function renderResults(tally, players) {
   const maxVotes = Math.max(...tally.map(e => e.votes), 1);
   const rows = document.getElementById('tally-rows');
   rows.innerHTML = tally.map((entry, i) => {
-    const eIdx = players.findIndex(p => p.name === entry.name);
+    const eIdx = players.findIndex(p => p.id === entry.id);
     const color = playerColor(eIdx);
     const pct = hasVotes ? Math.round((entry.votes / maxVotes) * 100) : 0;
     return `<div class="tally-row">
@@ -256,5 +284,54 @@ function renderResults(tally, players) {
     </div>`;
   }).join('');
 }
+
+// ── Sound settings ────────────────────────────────────────────────────────────
+
+const AUDIO_KEY = 'fdp-audio';
+const music = document.getElementById('bg-music');
+let audioSettings = { volume: 50, muted: false };
+try { Object.assign(audioSettings, JSON.parse(localStorage.getItem(AUDIO_KEY))); } catch (_) {}
+
+function applyAudioSettings() {
+  music.volume = audioSettings.volume / 100;
+  music.muted = audioSettings.muted;
+  document.getElementById('volume-slider').value = audioSettings.volume;
+  document.getElementById('volume-value').textContent = audioSettings.muted ? 'MUTED' : `${audioSettings.volume}%`;
+  document.getElementById('mute-btn').textContent = audioSettings.muted ? 'Unmute' : 'Mute';
+  document.getElementById('sound-toggle').textContent = audioSettings.muted || audioSettings.volume === 0 ? '🔇' : '♪';
+  try { localStorage.setItem(AUDIO_KEY, JSON.stringify(audioSettings)); } catch (_) {}
+}
+
+function toggleMute() {
+  audioSettings.muted = !audioSettings.muted;
+  applyAudioSettings();
+}
+
+// Autoplay can be blocked until the first interaction, so retry then
+function startMusic() {
+  music.play().catch(() => {
+    const retry = () => { music.play().catch(() => {}); };
+    document.addEventListener('pointerdown', retry, { once: true });
+    document.addEventListener('keydown', retry, { once: true });
+  });
+}
+
+document.getElementById('volume-slider').addEventListener('input', (e) => {
+  audioSettings.volume = parseInt(e.target.value);
+  audioSettings.muted = false;
+  applyAudioSettings();
+});
+document.getElementById('mute-btn').addEventListener('click', toggleMute);
+document.getElementById('sound-toggle').addEventListener('click', (e) => {
+  const panel = document.getElementById('sound-panel');
+  const open = panel.classList.toggle('open');
+  e.currentTarget.setAttribute('aria-expanded', open);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'm' && !e.target.closest?.('input, textarea')) toggleMute();
+});
+
+applyAudioSettings();
+startMusic();
 
 init().catch(console.error);
